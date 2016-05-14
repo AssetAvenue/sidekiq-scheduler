@@ -1,6 +1,7 @@
 require 'rufus/scheduler'
 require 'thwait'
 require 'sidekiq/util'
+require 'sidekiq/api'
 require 'sidekiq-scheduler/manager'
 
 module Sidekiq
