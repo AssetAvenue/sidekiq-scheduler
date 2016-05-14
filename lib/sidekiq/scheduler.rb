@@ -114,9 +114,11 @@ module Sidekiq
             opts = { :job => true }
 
             @@scheduled_jobs[name] = self.rufus_scheduler.send(interval_type, *args, opts) do |job, time|
-              config.delete(interval_type)
+              if self.execute?(config)
+                config.delete(interval_type)
 
-              idempotent_job_enqueue(name, time, config)
+                idempotent_job_enqueue(name, time, config)
+              end
             end
 
             interval_defined = true
@@ -131,6 +133,27 @@ module Sidekiq
       end
     end
 
+    def self.execute?(config)
+      if config['singleton']
+        me = nil
+        primary = nil
+        Sidekiq::ProcessSet.new.each do | process |
+          if process['pid'] == $$
+            me = process
+          elsif primary && process['started_at'] <= primary['started_at']
+            primary = process
+          elsif me && process['started_at'] <= me['started_at']
+            primary = process
+          end
+        end
+        if !primary.nil?
+          logger.info 'deferring job to ' + primary['identity']
+          return false
+        end
+      end
+
+      true
+    end
     # Pushes the job into Sidekiq if not already pushed for the given time
     #
     # @param [String] job_name The job's name
