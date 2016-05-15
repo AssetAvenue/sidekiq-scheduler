@@ -135,24 +135,21 @@ module Sidekiq
     end
 
     def self.execute?(config)
-      if config['singleton']
+      if config['single_process']
         me = nil
         primary = nil
+        processes = []
         Sidekiq::ProcessSet.new.each do | process |
-          if process['pid'] == $$
-            me = process
-          elsif primary && process['started_at'] <= primary['started_at']
-            primary = process
-          elsif me && process['started_at'] <= me['started_at']
-            primary = process
-          end
+          processes.push(process)
         end
-        if !primary.nil?
-          logger.info 'deferring job to ' + primary['identity']
+        sorted = processes.sort_by  {|p| p['started_at']}
+
+        return true if sorted.empty?
+        if sorted[0]['pid'] != $$
+          logger.info 'deferring job queueing to ' + processes[0]['identity']
           return false
         end
       end
-
       true
     end
     # Pushes the job into Sidekiq if not already pushed for the given time
